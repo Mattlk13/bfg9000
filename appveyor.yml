@@ -92,7 +92,10 @@ for:
         -P ninja
     build_script:
       - xcopy /i /q /s /h C:\projects\bfg9000 C:\cygwin64\home\appveyor\bfg9000
-      - C:\cygwin64\bin\bash -lc "cd bfg9000 && pip3.7 install codecov coverage mock ."
+      - >
+        git clone https://github.com/jimporter/mopack.git
+        C:\cygwin64\home\appveyor\mopack
+      - C:\cygwin64\bin\bash -lc "cd bfg9000 && pip3.7 install codecov coverage mock ../mopack ."
     test_script:
       - C:\cygwin64\bin\bash -lc "cd bfg9000 && python3.7 setup.py coverage -s test.integration.test_executable"
     on_success:
@@ -143,7 +146,8 @@ install:
     dlltool -U -d libogg.def -l lib\libogg.a &
     del libogg.def
 build_script:
-  - pip install .[test]
+  - git clone https://github.com/jimporter/mopack.git
+  - pip install ./mopack .[test]
 test_script:
   - python setup.py coverage -q
 on_success:
