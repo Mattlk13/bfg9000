@@ -125,6 +125,18 @@ Create a reference to an existing header named *name*. This is useful if you'd
 like to [install](#install) a single header file for your project. If *lang* is
 not specified, the language of the file is inferred from its extension.
 
+### man_page(*name*, \*, [*level*], [*compress*], [*dist*], [*extra_deps*], [*description*]) { #man_page }
+Availability: `build.bfg`
+{: .subtitle}
+
+Create a reference to an existing man page named *name* at the specified
+*level*; if *level* is unspecified, guess it by the first character of the
+extension of *name*.
+
+If *compress* is true, add a build step to gzip the man page and return the
+compressed file. If *compress* is `'auto'` (the default), gzip the man page only
+if the [`gzip`](environment-variables.md#gzip) command is found on the system.
+
 ### module_def_file(*name*, \*, [*dist*]) { #module_def_file }
 Availability: `build.bfg`
 {: .subtitle}
@@ -318,7 +330,7 @@ This build step recognizes the [dynamic linking environment
 variables](environment-vars.md#dynamic-linking) or the [static
 linking environment variables](environment-vars.md#static-linking), as well as
 the [compiler environment
-variable](environment-vars.md#compilation-variables) (e.g. `CC`) for the
+variable](environment-vars.md#compilation-variables) (e.g. `$CC`) for the
 relevant language.
 
 !!! warning
@@ -599,11 +611,11 @@ one argument is passed, or a tuple if multiple are passed.
     library will install the DLL *and* the import library.
 
 This step recognizes the following environment variables:
-[`DESTDIR`](environment-vars.md#destdir),
-[`INSTALL`](environment-vars.md#install),
-[`INSTALL_NAME_TOOL`](environment-vars.md#install_name_tool),
-[`MKDIR_P`](environment-vars.md#mkdir_p),
-[`PATCHELF`](environment-vars.md#patchelf).
+[`$DESTDIR`](environment-vars.md#destdir),
+[`$INSTALL`](environment-vars.md#install),
+[`$INSTALL_NAME_TOOL`](environment-vars.md#install_name_tool),
+[`$MKDIR_P`](environment-vars.md#mkdir_p),
+[`$PATCHELF`](environment-vars.md#patchelf).
 
 ## User-defined steps
 
@@ -784,49 +796,24 @@ to modify [static libraries](#static_library).
 
 ## Package resolvers
 
-### boost_package([*name*], [*version*]) { #boost_package }
-Availability: `build.bfg`
-{: .subtitle}
-
-Search for a [Boost][boost] library. You can specify *name* (as a string or a
-list) to specify a specific Boost library (or libraries); for instance,
-`'program_options'`. For header-only libraries, you can omit *name*. If
-*version* is specified, it will ensure that the installed version of Boost meets
-the version requirement; it must be formatted as a Python [version
-specifier][version-specifier].
-
-If this function is unable to find the specified Boost library, it will raise a
-[*PackageResolutionError*](#packageresolutionerror). If the library is found but
-doesn't match the required version, a
-[*PackageVersionError*](#packageversionerror) will be raised instead.
-
-This function recognizes the following environment variables:
-[`BOOST_ROOT`](environment-vars.md#boost_root),
-[`BOOST_INCLUDEDIR`](environment-vars.md#boost_includedir),
-[`BOOST_LIBRARYDIR`](environment-vars.md#boost_librarydir),
-[`CPATH`](environment-vars.md#cpath),
-[`INCLUDE`](environment-vars.md#include),
-[`LIB`](environment-vars.md#lib),
-[`LIBRARY_PATH`](environment-vars.md#library_path).
-
 ### framework(*name*, [*suffix*]) { #framework }
 
 Reference a macOS [framework][framework] named *name* with the optional suffix
 *suffix*. Though not a "package" in name, this can be used wherever packages are
 accepted.
 
-### package(*name*, [*version*], \*, [*lang*], [*kind*], [*headers*], [*libs*]) { #package }
+### package(*name*, [*submodules*], [*version*], \*, [*lang*], [*kind*]) { #package }
 Availability: `build.bfg`
 {: .subtitle}
 
-Search for a package named *name*. *lang* is the source language of the library
-(if not specified, this will guess the language based on the extensions in
-*headers*, or use `'c'` as a fallback); this will affect how the package is
-resolved. For native libraries (C, C++, Fortran, etc), this will use
-[`pkg-config`][pkg-config] to resolve the package if it's installed. Otherwise
-(or if pkg-config can't find the package), this will check the system's default
-library locations. If this function is unable to find the package, it will raise
-a [*PackageResolutionError*](#packageresolutionerror).
+Search for a package named *name* optionally containing one or more
+*submodules*. *lang* is the source language of the package (if not specified,
+this will use the [default language](#project) for the project); this will
+affect how the package is resolved. For native packages (C, C++, Fortran, etc),
+this will use [mopack][mopack] to resolve the package; otherwise, this will use
+a language-specific check to find packages on the system. If this function is
+unable to find the package, it will raise a
+[*PackageResolutionError*](#packageresolutionerror).
 
 You can also specify *kind* to one of `'any'` (the default), `'shared'`, or
 `'static'`. This allows you to restrict the search to find only static versions
@@ -837,22 +824,17 @@ version of the package meets the version requirement; it must be formatted as a
 Python [version specifier][version-specifier]. If this check fails, a
 [*PackageVersionError*](#packageversionerror) will be raised.
 
-The *headers* and *libs* arguments can be used as fallbacks when pkg-config
-fails to resolve the package. *headers* allows you to specify a header file (or
-list thereof) that you need to use in your source files. This will search for
-the header files and add the appropriate include directories to your build
-configuration. *libs* lets you list any library names that are part of this
-package; by default, this is set to the package's *name*. You can also pass
-*None* to *libs* in order to explicitly indicate that the library is
-header-only.
+When calling this function, you can exclude the *submodules* argument and pass
+a *version* as the second positional argument if it's parseable as a version
+specifier. For example, `package('pkg', '>=1.0')`.
 
 This function recognizes the following environment variables:
-[`CLASSPATH`](environment-vars.md#classpath),
-[`CPATH`](environment-vars.md#cpath),
-[`INCLUDE`](environment-vars.md#include),
-[`LIB`](environment-vars.md#lib),
-[`LIBRARY_PATH`](environment-vars.md#library_path),
-[`PKG_CONFIG`](environment-vars.md#pkg_config).
+[`$CLASSPATH`](environment-vars.md#classpath),
+[`$CPATH`](environment-vars.md#cpath),
+[`$INCLUDE`](environment-vars.md#include),
+[`$LIB`](environment-vars.md#lib),
+[`$LIBRARY_PATH`](environment-vars.md#library_path),
+[`$PKG_CONFIG`](environment-vars.md#pkg_config).
 
 !!! note
     This function can also be used to refer to the pthread library. On many
@@ -920,12 +902,12 @@ object that can be used in other build steps as normal.
 Availability: `build.bfg`
 {: .subtitle}
 
-Search for an executable named *name* somewhere in the system's `PATH`. If
+Search for an executable named *name* somewhere in the system's `$PATH`. If
 *format* is unset, the executable's object format will be set to the default
 for the host platform.
 
 This function recognizes the following environment variables:
-[`PATH`](environment-vars.md#path), [`PATHEXT`](environment-vars.md#pathext).
+[`$PATH`](environment-vars.md#path), [`$PATHEXT`](environment-vars.md#pathext).
 
 ## Environment
 
@@ -1007,6 +989,10 @@ Equivalent to `env.execute(env.run_arguments(arg, lang), ...)`.
 
 Return the target [platform](#platforms) used for the build.
 
+#### env.tool(*name*) { #env-tool }
+
+Return the [tool](#tools) named *name*.
+
 #### env.variables { #env-variables }
 
 A dict of all the environment variables as they were defined when the build was
@@ -1072,10 +1058,12 @@ The runner used with files built by this builder (e.g. `java`). This may be
 
 ---
 
-### Compilers
+### Compilers/linkers { #compilers }
 
-Builder objects represent the specific used to compile a
-[source file](#source_file) (generally into an [object file](#object_file)).
+Compiler and linker objects represent the specific tool used to compile a
+[source file](#source_file) (generally into an [object file](#object_file)) or
+to link a set of object files (generally into an [executable](#executable) or
+[library](#library)).
 
 #### *compiler*.flavor { #compiler-flavor }
 
@@ -1099,7 +1087,30 @@ The language of the compiler; typically the same as
 
 #### *compiler*.command { #compiler-command }
 
-The command to run when invoking this compiler, e.g. `g++-4.9`.
+The command to run when invoking this compiler, represented as a list, e.g.
+`['g++']`.
+
+#### *compiler*.found { #compiler-found }
+
+Whether the command for this compiler was found on the system.
+
+---
+
+### Tools
+
+Tool objects represent a specific command used to perform some task (usually
+during a build), such as `'copy'` or `'rm'`. They can be retrieved via
+[*env.tool*](#env-tool). While tool objects are primarily suited to bfg's
+internals, there are still a few useful properties for `build.bfg` files:
+
+#### *tool*.command { #tool-command }
+
+The command to run when invoking this tool, represented as a list, e.g.
+`['cp', '-f']`.
+
+#### *tool*.found { #tool-found }
+
+Whether this tool was found on the system.
 
 ---
 
@@ -1301,6 +1312,8 @@ during installation. Possible values are:
 * *bindir*: A path relative to where binaries will be installed
 * *libdir*: A path relative to where libraries will be installed
 * *includedir*: A path relative to where header files will be installed
+* *datadir*: A path relative to where data files will be installed
+* *mandir*: A path relative to where man pages will be installed
 
 ### Path(*path*, [*root*], [*destdir*]) { #Path }
 Availability: `build.bfg`, `options.bfg`, and `<toolchain>.bfg`
@@ -1544,7 +1557,7 @@ Availability: `<toolchain>.bfg`
 {: .subtitle}
 
 Find the best option for an executable named by *names*. *names* can be a
-string resolved as with the `PATH` environment variable in the shell, or else a
+string resolved as with the `$PATH` environment variable in the shell, or else a
 list of names (as strings or lists of strings). If *names* contains a
 list-of-lists, the inner list represents a series of arguments to pass to the
 executable when running it.
@@ -1594,6 +1607,7 @@ specifier.
 [msvc-pch]: https://msdn.microsoft.com/en-us/library/szfdksca.aspx
 [whole-archive]: http://linux.die.net/man/1/ld
 [boost]: https://www.boost.org/
+[mopack]: https://jimporter.github.io/mopack/
 [version-specifier]: https://www.python.org/dev/peps/pep-0440/#version-specifiers
 [framework]: https://developer.apple.com/library/content/documentation/MacOSX/Conceptual/OSX_Technology_Overview/SystemFrameworks/SystemFrameworks.html
 [pkg-config]: https://www.freedesktop.org/wiki/Software/pkg-config/

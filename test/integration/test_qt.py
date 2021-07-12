@@ -3,6 +3,7 @@ from . import *
 
 # MSBuild backend doesn't support generated_source yet.
 @skip_if_backend('msbuild')
+@skip_if('qt' not in test_features, 'skipping qt tests')
 class TestQt(IntegrationTest):
     def run_executable(self, exe):
         if env.host_platform.genus == 'linux':
@@ -15,7 +16,7 @@ class TestQt(IntegrationTest):
         env_vars = ({} if env.builder('c++').flavor == 'msvc'
                     else {'CPPFLAGS': ('-Wno-inconsistent-missing-override ' +
                                        env.getvar('CPPFLAGS', ''))})
-        super().__init__(os.path.join(examples_dir, '13_qt'),
+        super().__init__(os.path.join(examples_dir, '14_qt'),
                          *args, extra_env=env_vars, **kwargs)
 
     def test_designer(self):

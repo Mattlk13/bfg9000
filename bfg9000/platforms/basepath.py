@@ -9,7 +9,7 @@ from ..objutils import objectify
 
 Root = Enum('Root', ['srcdir', 'builddir', 'absolute'])
 InstallRoot = Enum('InstallRoot', ['prefix', 'exec_prefix', 'bindir', 'libdir',
-                                   'includedir'])
+                                   'includedir', 'datadir', 'mandir'])
 DestDir = Enum('DestDir', ['destdir'])
 
 
@@ -79,12 +79,10 @@ class BasePath(safe_str.safe_string):
 
     @staticmethod
     def __normpath(path):
-        # A path counts as a directory if either its raw form or its normalized
-        # form ends with `\` or `/`.
         path = path.replace('\\', '/')
-        isdir = path.endswith(posixpath.sep)
+        isdir = posixpath.basename(path) in ('', posixpath.curdir,
+                                             posixpath.pardir)
         path = posixpath.normpath(path)
-        isdir = isdir or path.endswith(posixpath.sep)
         if path == posixpath.curdir:
             path = ''
         return path, isdir
@@ -181,7 +179,7 @@ class BasePath(safe_str.safe_string):
                 suffix += posixpath.sep
             else:
                 suffix = posixpath.curdir + posixpath.sep
-        return (suffix, self.root.name, self.destdir)
+        return [suffix, self.root.name, self.destdir]
 
     @classmethod
     def from_json(cls, data):
@@ -237,8 +235,8 @@ class BasePath(safe_str.safe_string):
 
     def __repr__(self):
         s = self.realize(self.__repr_variables)
-        if self.directory and not s.endswith(posixpath.sep):
-            s += posixpath.sep
+        if self.directory and not s.endswith(self._localized_sep):
+            s += self._localized_sep
         return '`{}`'.format(s)
 
     def __hash__(self):

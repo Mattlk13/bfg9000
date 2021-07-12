@@ -5,8 +5,10 @@ from .target import TargetPlatform
 
 
 class WindowsPath(BasePath):
+    _localized_sep = '\\'
+
     def _localize_path(self, path):
-        return path.replace('/', '\\')
+        return path.replace(self.sep, self._localized_sep)
 
 
 class WindowsPlatform(Platform):
@@ -44,12 +46,6 @@ class WindowsHostPlatform(HostPlatform, WindowsPlatform):
 
 
 class WindowsTargetPlatform(TargetPlatform, WindowsPlatform):
-    _package_map = {
-        'gl': 'opengl32',
-        'glu': 'glu32',
-        'glut': 'glut32',
-    }
-
     @property
     def executable_ext(self):
         return '.exe'
@@ -78,4 +74,6 @@ class WindowsTargetPlatform(TargetPlatform, WindowsPlatform):
             InstallRoot.bindir     : WindowsPath('', InstallRoot.exec_prefix),
             InstallRoot.libdir     : WindowsPath('', InstallRoot.exec_prefix),
             InstallRoot.includedir : WindowsPath('', InstallRoot.prefix),
+            InstallRoot.datadir    : WindowsPath('', InstallRoot.prefix),
+            InstallRoot.mandir     : WindowsPath('man/', InstallRoot.datadir),
         }

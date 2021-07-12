@@ -2,35 +2,28 @@ import os.path
 
 from . import *
 
-is_mingw = (env.host_platform.family == 'windows' and
-            env.builder('c++').flavor == 'cc')
-
 
 class TestPackage(IntegrationTest):
     def __init__(self, *args, **kwargs):
-        super().__init__(os.path.join(examples_dir, '04_package'), *args,
+        super().__init__(os.path.join(examples_dir, '06_package'), *args,
                          **kwargs)
 
     def test_build(self):
         self.build()
-        # XXX: This fails on MinGW (not sure why)...
-        if not is_mingw:
-            self.assertOutput([executable('program')], '')
+        self.assertOutput([executable('program')], '')
 
 
 class TestSystemPackage(IntegrationTest):
     def __init__(self, *args, **kwargs):
-        super().__init__(os.path.join(examples_dir, '04_package'),
+        super().__init__(os.path.join(examples_dir, '06_package'),
                          extra_env={'PKG_CONFIG': 'nonexist'}, *args, **kwargs)
 
     def test_build(self):
         self.build()
-        # XXX: This fails on MinGW (not sure why)...
-        if not is_mingw:
-            self.assertOutput([executable('program')], '')
+        self.assertOutput([executable('program')], '')
 
 
-@skip_if(is_mingw, 'xfail on mingw')
+@skip_if('boost' not in test_features, 'skipping boost tests')
 class TestBoostPackage(IntegrationTest):
     def __init__(self, *args, **kwargs):
         super().__init__('boost', *args, **kwargs)

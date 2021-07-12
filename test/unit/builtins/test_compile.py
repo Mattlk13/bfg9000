@@ -7,7 +7,8 @@ from .. import make_env
 from bfg9000 import file_types, options as opts
 from bfg9000.backends.make import syntax as make
 from bfg9000.backends.ninja import syntax as ninja
-from bfg9000.builtins import compile, link, packages, project  # noqa
+from bfg9000.builtins import (compile, link, packages, project,  # noqa
+                              regenerate)  # noqa
 from bfg9000.environment import LibraryMode
 from bfg9000.iterutils import listify, unlistify
 from bfg9000.packages import CommonPackage
@@ -42,6 +43,13 @@ class CompileTest(BuiltinTest):
 
 class TestObjectFile(CompileTest):
     mode = 'compiler'
+
+    def setUp(self):
+        super().setUp()
+        with mock.patch('bfg9000.shell.which', mock_which), \
+             mock.patch('bfg9000.shell.execute', mock_execute):  # noqa
+            self.env.builder('qrc')
+            self.env.builder('qtmoc')
 
     def test_identity(self):
         expected = file_types.ObjectFile(Path('object', Root.srcdir), None)
@@ -185,13 +193,15 @@ class TestObjectFile(CompileTest):
         self.assertEqual(result.creator.include_deps, [inc])
 
     def test_include_order(self):
+        fmt = self.env.target_platform.object_format
         incdir = opts.include_dir(file_types.HeaderDirectory(
             Path('include', Root.srcdir)
         ))
         pkg_incdir = opts.include_dir(file_types.HeaderDirectory(
             Path('/usr/include', Root.absolute)
         ))
-        pkg = CommonPackage('pkg', None, opts.option_list(pkg_incdir))
+        pkg = CommonPackage('pkg', format=fmt,
+                            compile_options=opts.option_list(pkg_incdir))
 
         result = self.context['object_file'](file='main.cpp',
                                              includes='include', packages=pkg)

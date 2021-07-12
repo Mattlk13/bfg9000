@@ -1,5 +1,36 @@
 # Changes
 
+## v0.7.0
+in progress
+{: .subtitle}
+
+### New features
+- Add support for resolving external package dependencies via [mopack][mopack]
+- Add `bfg9000 run` command to allow executing other commands using the
+  environment variables for a given build
+- Add support for installing man pages
+- Add `--datadir` and `--mandir` configuration options
+- Create `compile_commands.json` when generating build scripts
+- `pkg-config` executable can now be found by guessing based on other compilers
+- Compiler and tool objects now have a `found` property to indicate if they were
+  found on the system
+- Add support for `CLICOLOR` and `CLICOLOR_FORCE` environment variables to
+  control whether to display colors in terminal output
+
+### Breaking changes
+- Require Python 3.6+
+
+### Bug fixes
+- Error reporting now shows the proper stack frames on Windows
+- Fix detection of `clang-cl` compiler
+- MinGW can now use libraries of the form `name.lib`
+- Replace `packaging` dependency with `verspec` for future stability
+- Paths with basenames of `.` or `..` are now treated as directories
+
+[mopack]: https://jimporter.github.io/mopack/
+
+---
+
 ## v0.6.0
 2020-09-12
 {: .subtitle}

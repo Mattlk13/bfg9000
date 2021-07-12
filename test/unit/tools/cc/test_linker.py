@@ -22,7 +22,7 @@ class TestCcLinker(CrossPlatformTestCase):
         with mock.patch('bfg9000.shell.which', mock_which), \
              mock.patch('bfg9000.shell.execute', mock_execute):  # noqa
             return CcBuilder(self.env, known_langs[lang], ['c++'],
-                             'version').linker('executable')
+                             True, 'version').linker('executable')
 
     def _get_output_file(self):
         return Executable(self.Path('program'), 'native')
@@ -147,13 +147,20 @@ class TestCcLinker(CrossPlatformTestCase):
             opts.lib(Library(lib, 'native'))
         )), ['-L' + libdir])
 
-        mingw_lib = self.Path('/path/to/lib/foo.lib')
+        if self.env.target_platform.family == 'windows':
+            mingw_lib = self.Path('/path/to/lib/foo.lib')
+            self.assertEqual(self.linker.flags(opts.option_list(
+                opts.lib(Library(mingw_lib, 'native'))
+            )), ['-L' + libdir])
+
+        # Non-standard library name
+        goofy_lib = self.Path('/path/to/lib/foo.goofy')
         self.assertEqual(self.linker.flags(opts.option_list(
-            opts.lib(Library(mingw_lib, 'native'))
+            opts.lib(Library(goofy_lib, 'native'))
         )), [])
         with self.assertRaises(ValueError):
             self.linker.flags(opts.option_list(
-                opts.lib(Library(mingw_lib, 'native'))
+                opts.lib(Library(goofy_lib, 'native'))
             ), mode='pkg-config')
 
         # Framework
@@ -330,13 +337,20 @@ class TestCcLinker(CrossPlatformTestCase):
             opts.lib(Library(lib, 'native'))
         )), ['-lfoo'])
 
-        mingw_lib = self.Path('/path/to/lib/foo.lib')
+        if self.env.target_platform.family == 'windows':
+            mingw_lib = self.Path('/path/to/lib/foo.lib')
+            self.assertEqual(self.linker.lib_flags(opts.option_list(
+                opts.lib(Library(mingw_lib, 'native'))
+            )), ['-lfoo'])
+
+        # Non-standard library name
+        goofy_lib = self.Path('/path/to/lib/foo.goofy')
         self.assertEqual(self.linker.lib_flags(opts.option_list(
-            opts.lib(Library(mingw_lib, 'native'))
-        )), [mingw_lib])
+            opts.lib(Library(goofy_lib, 'native'))
+        )), [goofy_lib])
         with self.assertRaises(ValueError):
             self.linker.lib_flags(opts.option_list(
-                opts.lib(Library(mingw_lib, 'native'))
+                opts.lib(Library(goofy_lib, 'native'))
             ), mode='pkg-config')
 
         # Framework
@@ -453,7 +467,7 @@ class TestCcSharedLinker(TestCcLinker):
         with mock.patch('bfg9000.shell.which', mock_which), \
              mock.patch('bfg9000.shell.execute', mock_execute):  # noqa
             return CcBuilder(self.env, known_langs[lang], ['c++'],
-                             'version').linker('shared_library')
+                             True, 'version').linker('shared_library')
 
     def _get_output_file(self):
         return SharedLibrary(self.Path('liboutput.so'), 'native')

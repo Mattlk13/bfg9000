@@ -27,7 +27,7 @@ Default: `cc` (POSIX), `cl` (Windows)
 The command to use when compiling C source files. Also the command to use with
 cc-style toolchains when linking object files whose source is in C. If not
 defined, bfg9000 will try to guess the command to use by checking
-[`OBJC`](#objc), [`CXX`](#cxx), and [`OBJCXX`](#objcxx), in that order.
+[`$OBJC`](#objc), [`$CXX`](#cxx), and [`$OBJCXX`](#objcxx), in that order.
 
 #### *CFLAGS*
 Default: *none*
@@ -45,7 +45,7 @@ Default: `c++` (POSIX), `cl` (Windows)
 The command to use when compiling C++ source files. Also the command to use with
 cc-style toolchains when linking object files whose source is in C++. If not
 defined, bfg9000 will try to guess the command to use by checking
-[`OBJCXX`](#objcxx), [`CC`](#cc), and [`OBJC`](#objc), in that order.
+[`$OBJCXX`](#objcxx), [`$CC`](#cc), and [`$OBJC`](#objc), in that order.
 
 #### *CXXFLAGS*
 Default: *none*
@@ -113,7 +113,7 @@ Default: `cc`
 The command to use when compiling Objective C source files. Also the command to
 use with cc-style toolchains when linking object files whose source is in
 Objective C. If not defined, bfg9000 will try to guess the command to use by
-checking [`CC`](#cc), [`OBJCXX`](#objcxx), and [`CXX`](#cxx), in that order.
+checking [`$CC`](#cc), [`$OBJCXX`](#objcxx), and [`$CXX`](#cxx), in that order.
 
 #### *OBJCFLAGS*
 Default: *none*
@@ -132,7 +132,7 @@ Default: `c++`
 The command to use when compiling Objective C++ source files. Also the command
 to use with cc-style toolchains when linking object files whose source is in
 Objective C++. If not defined, bfg9000 will try to guess the command to use by
-checking [`CXX`](#cxx), [`OBJC`](#objc), and [`CC`](#cc), in that order.
+checking [`$CXX`](#cxx), [`$OBJC`](#objc), and [`$CC`](#cc), in that order.
 
 #### *OBJCXXFLAGS*
 Default: *none*
@@ -252,8 +252,8 @@ The command to use when creating (native) static libraries from object files
 Default: `cru` (POSIX)
 {: .subtitle}
 
-The arguments to pass to the static library builder (specified in `AR`) for
-native libraries.
+The arguments to pass to the static library builder (specified in [`$AR`](#ar))
+for native libraries.
 
 #### *JAR*
 Default: `jar`
@@ -336,27 +336,6 @@ The command to use when running Scala `.class` files or `.jar`s.
 ## Packaging variables
 ---
 
-#### *BOOST_ROOT*
-Default: *none*
-{: .subtitle}
-
-The root directory where Boost headers and libraries are stored (as
-`$BOOST_ROOT/include` and `$BOOST_ROOT/lib`, respectively).
-
-#### *BOOST_INCLUDEDIR*
-Default: *none*
-{: .subtitle}
-
-The root directory where Boost headers are stored. This takes precedence over
-[*BOOST_ROOT*](#boost_root).
-
-#### *BOOST_LIBRARYDIR*
-Default: *none*
-{: .subtitle}
-
-The root directory where Boost libraries are stored. This takes precedence over
-[*BOOST_ROOT*](#boost_root).
-
 #### *CLASSPATH*
 Default: *none*
 {: .subtitle}
@@ -391,6 +370,12 @@ Default: *none*
 A list of additional directories to search for [system
 libraries](builtins.md#package). On POSIX systems, this is delimited by
 `:`; on Windows, by `;`.
+
+#### *MOPACK*
+Default: `mopack`
+{: .subtitle}
+
+The command to use when resolving package dependencies via [mopack][mopack].
 
 #### *PATH*
 Default: *none*
@@ -444,6 +429,12 @@ Default: `doppel`
 The command to use when installing files and building source distributions. For
 more information about doppel, see its [documentation][doppel].
 
+#### *GZIP*
+Default: `gzip`
+{: .subtitle}
+
+The command to use when gzipping files.
+
 #### *HARDLINK*
 Default: `ln -f` (POSIX), `cmd /c mklink /H` (Windows)
 {: .subtitle}
@@ -496,13 +487,29 @@ The command to use when creating symlinks.
 ## System variables
 ---
 
+#### *CLICOLOR*
+Default: *none*
+{: .subtitle}
+
+If set to `0`, disable colors in terminal output, overriding the `--color`
+option and tty detection. If set to non-zero, enable colors if outputting to a
+tty.
+
+#### *CLICOLOR_FORCE*
+Default: *none*
+{: .subtitle}
+
+If set to non-zero, enable colors in the terminal output regardless of whether
+the destination is a tty. This overrides [`$CLICOLOR`](#CLICOLOR).
+
 #### *DESTDIR*
 Default: *none*
 {: .subtitle}
 
-*POSIX-only*. A directory to prepend to the install location for the project,
-used in performing staged installs. For more information, see the [GNU coding
-standards][destdir].
+A directory to prepend to the install location for the project, used in
+performing staged installs. For more information, see the [GNU coding
+standards][destdir]. On Windows, this can be used so long as the installation
+prefixes are drive-relative (e.g. `\path\to\install`).
 
 #### *PLATFORM*
 Default: `Win32`
@@ -517,5 +524,6 @@ Default: `14.0`
 *Windows-only*. The version of Visual Studio to target when generating MSBuild
 files.
 
-[doppel]: https://github.com/jimporter/doppel
+[mopack]: https://jimporter.github.io/mopack/
+[doppel]: https://github.com/jimporter/doppel/
 [destdir]: https://www.gnu.org/prep/standards/html_node/DESTDIR.html

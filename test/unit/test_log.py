@@ -1,9 +1,11 @@
 import inspect
 import logging
+import ntpath
 import sys
 import traceback
 import warnings
 from io import StringIO
+from collections import namedtuple
 from unittest import mock
 
 from . import *
@@ -12,12 +14,60 @@ from bfg9000 import log, iterutils
 from bfg9000.path import Path
 from bfg9000.safe_str import safe_string
 
+MockPlatform = namedtuple('MockPlatform', ['family'])
+
 # Make sure we're referring to the .py file, not the .pyc file.
 this_file = __file__.rstrip('c')
 
 
 def current_lineno():
     return inspect.stack()[1][2]
+
+
+class TestIsUserSrc(TestCase):
+    def test_user(self):
+        self.assertTrue(log._is_user_src(this_file))
+
+    def test_internal(self):
+        iterutils_file = iterutils.__file__.rstrip('c')
+        self.assertFalse(log._is_user_src(iterutils_file))
+
+    def test_runpy(self):
+        with mock.patch('bfg9000.log.platform_info',
+                        return_value=MockPlatform('windows')), \
+             mock.patch('sys.exec_prefix', r'C:\Python'), \
+             mock.patch('os.path', ntpath):  # noqa
+            self.assertFalse(log._is_user_src(r'C:\Python\lib\runpy.py'))
+
+    def test_setuptools_wrapper(self):
+        with mock.patch('bfg9000.log.platform_info',
+                        return_value=MockPlatform('windows')), \
+             mock.patch('sys.exec_prefix', r'C:\Python'), \
+             mock.patch('os.path', ntpath):  # noqa
+            self.assertFalse(log._is_user_src(
+                r'C:\Python\Scripts\9k.exe\__main__.py'
+            ))
+
+
+class TestCliColor(TestCase):
+    def test_clicolor(self):
+        self.assertEqual(log._clicolor({'CLICOLOR': '0'}), 'never')
+        self.assertEqual(log._clicolor({'CLICOLOR': '1'}), 'auto')
+        self.assertEqual(log._clicolor({'CLICOLOR': '2'}), 'auto')
+
+    def test_clicolor_force(self):
+        self.assertEqual(log._clicolor({'CLICOLOR_FORCE': '0'}), None)
+        self.assertEqual(log._clicolor({'CLICOLOR_FORCE': '1'}), 'always')
+
+    def test_neither(self):
+        self.assertEqual(log._clicolor({}), None)
+
+    def test_both(self):
+        c = log._clicolor
+        self.assertEqual(c({'CLICOLOR': '0', 'CLICOLOR_FORCE': '0'}), 'never')
+        self.assertEqual(c({'CLICOLOR': '0', 'CLICOLOR_FORCE': '1'}), 'always')
+        self.assertEqual(c({'CLICOLOR': '1', 'CLICOLOR_FORCE': '0'}), 'auto')
+        self.assertEqual(c({'CLICOLOR': '1', 'CLICOLOR_FORCE': '1'}), 'always')
 
 
 class TestColoredStreamHandler(TestCase):
@@ -86,7 +136,7 @@ class TestStackfulStreamHandler(TestCase):
         self.assertEqual(record.full_stack, [
             (this_file, lineno, 'test_internal_error',
              "iterutils.first(None)"),
-            (iterutils_file, 74, 'first', 'raise LookupError()'),
+            (iterutils_file, 83, 'first', 'raise LookupError()'),
         ])
         self.assertEqual(record.stack_pre, '')
         self.assertEqual(record.stack, (
@@ -96,7 +146,7 @@ class TestStackfulStreamHandler(TestCase):
         ).format(this_file, lineno))
         self.assertEqual(record.stack_post, (
             '\n' +
-            '  File "{}", line 74, in first\n' +
+            '  File "{}", line 83, in first\n' +
             "    raise LookupError()"
         ).format(iterutils_file))
         self.assertEqual(record.user_pathname, this_file)
@@ -197,13 +247,13 @@ class TestStackfulStreamHandler(TestCase):
 
         iterutils_file = iterutils.__file__.rstrip('c')
         self.assertEqual(record.full_stack, [
-            (iterutils_file, 74, 'first', 'raise LookupError()'),
+            (iterutils_file, 83, 'first', 'raise LookupError()'),
         ])
 
         self.assertEqual(record.show_stack, False)
         self.assertEqual(record.stack_pre, (
             '\n' +
-            '  File "{}", line 74, in first\n' +
+            '  File "{}", line 83, in first\n' +
             "    raise LookupError()"
         ).format(iterutils_file))
         self.assertEqual(record.stack, '')

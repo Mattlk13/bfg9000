@@ -3,12 +3,16 @@ from . import *
 
 class TestCustomSteps(IntegrationTest):
     def __init__(self, *args, **kwargs):
-        super().__init__(os.path.join(examples_dir, '09_custom_steps'), *args,
+        super().__init__(os.path.join(examples_dir, '11_custom_steps'), *args,
                          **kwargs)
 
     def test_hello(self):
         self.build(executable('hello'))
         self.assertOutput([executable('hello')], 'hello from python!\n')
+
+    def test_intro(self):
+        self.build(executable('intro'))
+        self.assertOutput([executable('intro')], 'my name is coco!\n')
 
     def test_goodbye(self):
         self.build(executable('goodbye'))
@@ -18,6 +22,6 @@ class TestCustomSteps(IntegrationTest):
         if self.backend == 'make':
             self.clean()
             self.assertDirectory('.', {
-                '.bfg_environ', 'Makefile',
+                '.bfg_environ', 'compile_commands.json', 'Makefile',
                 os.path.join('goodbye.int', '.dir'),
             })

@@ -1,7 +1,7 @@
 import os.path
 from itertools import chain
 
-from .. import pkg_config
+from .. import mopack, pkg_config
 from ... import log, options as opts, shell
 from .compiler import MsvcCompiler, MsvcPchCompiler
 from .linker import (MsvcExecutableLinker, MsvcSharedLibraryLinker,
@@ -9,17 +9,18 @@ from .linker import (MsvcExecutableLinker, MsvcSharedLibraryLinker,
 from .rc import MsvcRcBuilder  # noqa: F401
 from ..common import Builder, check_which
 from ...exceptions import PackageResolutionError
-from ...file_types import HeaderDirectory, Library
-from ...iterutils import default_sentinel, iterate, uniques
+from ...file_types import Directory, HeaderDirectory, Library
+from ...iterutils import listify, uniques
 from ...languages import known_formats
 from ...packages import CommonPackage, PackageKind
-from ...path import exists, Root
+from ...path import abspath, exists, Root
 from ...versioning import detect_version
 
 
 class MsvcBuilder(Builder):
-    def __init__(self, env, langinfo, command, version_output):
-        super().__init__(langinfo.name, *self._parse_brand(version_output))
+    def __init__(self, env, langinfo, command, found, version_output):
+        brand, version = self._parse_brand(env, command, version_output)
+        super().__init__(langinfo.name, brand, version)
         self.object_format = env.target_platform.object_format
 
         name = langinfo.var('compiler').lower()
@@ -32,11 +33,11 @@ class MsvcBuilder(Builder):
         for i in reversed(command):
             if os.path.basename(i) in ('cl', 'cl.exe'):
                 origin = os.path.dirname(i)
-        link_command = check_which(
+        link_which = check_which(
             env.getvar(ldinfo.var('linker'), os.path.join(origin, 'link')),
             env.variables, kind='{} dynamic linker'.format(self.lang)
         )
-        lib_command = check_which(
+        lib_which = check_which(
             env.getvar(arinfo.var('linker'), os.path.join(origin, 'lib')),
             env.variables, kind='{} static linker'.format(self.lang)
         )
@@ -57,12 +58,12 @@ class MsvcBuilder(Builder):
         arflags_name = arinfo.var('flags').lower()
         arflags = shell.split(env.getvar(arinfo.var('flags'), ''))
 
-        compile_kwargs = {'command': (name, command),
+        compile_kwargs = {'command': (name, command, found),
                           'flags': (cflags_name, cflags)}
         self.compiler = MsvcCompiler(self, env, **compile_kwargs)
         self.pch_compiler = MsvcPchCompiler(self, env, **compile_kwargs)
 
-        link_kwargs = {'command': (ld_name, link_command),
+        link_kwargs = {'command': (ld_name,) + link_which,
                        'flags': (ldflags_name, ldflags),
                        'libs': (ldlibs_name, ldlibs)}
         self._linkers = {
@@ -70,7 +71,7 @@ class MsvcBuilder(Builder):
             'shared_library': MsvcSharedLibraryLinker(self, env, name,
                                                       **link_kwargs),
             'static_library': MsvcStaticLinker(
-                self, env, command=(ar_name, lib_command),
+                self, env, command=(ar_name,) + lib_which,
                 flags=(arflags_name, arflags)
             ),
         }
@@ -78,15 +79,21 @@ class MsvcBuilder(Builder):
         self.runner = None
 
     @staticmethod
-    def _parse_brand(version_output):
+    def _parse_brand(env, command, version_output):
         if 'Microsoft (R)' in version_output:
             return 'msvc', detect_version(version_output)
-        # XXX: Detect clang-cl.
+        elif 'clang LLVM compiler' in version_output:
+            real_version = env.execute(
+                command + ['--version'], stdout=shell.Mode.pipe,
+                stderr=shell.Mode.stdout
+            )
+            return 'clang', detect_version(real_version)
+
         return 'unknown', None
 
     @staticmethod
     def check_command(env, command):
-        return env.execute(command + ['/?'], stdout=shell.Mode.pipe,
+        return env.execute(command + ['-?'], stdout=shell.Mode.pipe,
                            stderr=shell.Mode.stdout)
 
     @property
@@ -129,7 +136,7 @@ class MsvcPackageResolver:
         return self.builder.lang
 
     def header(self, name, search_dirs=None):
-        if search_dirs is None:
+        if not search_dirs:
             search_dirs = self.include_dirs
 
         for base in search_dirs:
@@ -141,7 +148,7 @@ class MsvcPackageResolver:
         raise PackageResolutionError("unable to find header '{}'".format(name))
 
     def library(self, name, kind=PackageKind.any, search_dirs=None):
-        if search_dirs is None:
+        if not search_dirs:
             search_dirs = self.lib_dirs
         libname = name + '.lib'
 
@@ -157,24 +164,73 @@ class MsvcPackageResolver:
         raise PackageResolutionError("unable to find library '{}'"
                                      .format(name))
 
-    def resolve(self, name, version, kind, headers, lib_names):
+    # TODO: Remove headers/libs from arguments after 0.7 is released.
+    def _resolve_path(self, name, submodules, format, kind, *, version=None,
+                      get_version=None, headers=None, libs=None, usage={}):
+        headers = listify(headers) + usage.get('headers', [])
+        libraries = (
+            listify(libs) + mopack.to_frameworks(usage.get('libraries', []))
+        )
+        include_path = [abspath(i) for i in usage.get('include_path', [])]
+        library_path = [abspath(i) for i in usage.get('library_path', [])]
+
+        compile_options = opts.option_list()
+
+        if headers:
+            compile_options.extend(opts.include_dir(
+                self.header(i, include_path)
+            ) for i in headers)
+        elif include_path:
+            compile_options.extend(opts.include_dir(
+                HeaderDirectory(i, None, system=True)
+            ) for i in include_path)
+
+        if usage.get('auto_link', False):
+            link_options = opts.option_list(opts.lib_dir(Directory(i))
+                                            for i in library_path)
+            found_lib_path = library_path[0].string() if library_path else None
+        else:
+            link_options = opts.option_list(opts.lib(
+                self.library(i, kind, library_path)
+            ) for i in libraries)
+            found_lib_path = (link_options[0].library.path.parent().string()
+                              if link_options else None)
+
+        found_ver = None
+        if get_version:
+            header_dirs = [i.directory for i in compile_options
+                           if isinstance(i, opts.include_dir)]
+            found_ver = get_version(header_dirs, version)
+
+        pkg = CommonPackage(
+            name, submodules, found_ver, format=format,
+            compile_options=compile_options, link_options=link_options
+        )
+        version_note = ' version {}'.format(found_ver) if found_ver else ''
+        path_note = ' in {}'.format(found_lib_path) if found_lib_path else ''
+        log.info('found package {!r}{} via path-search{}'
+                 .format(pkg.name, version_note, path_note))
+        return pkg
+
+    def resolve(self, name, submodules, version, kind, *, get_version=None,
+                headers=None, libs=None):
         format = self.builder.object_format
-        try:
-            return pkg_config.resolve(self.env, name, format, version, kind)
-        except (OSError, PackageResolutionError):
-            if lib_names is default_sentinel:
-                lib_names = self.env.target_platform.transform_package(name)
+        usage = mopack.get_usage(self.env, name, submodules)
 
-            compile_options = opts.option_list(
-                opts.include_dir(self.header(i)) for i in iterate(headers)
+        if usage['type'] == 'pkg_config':
+            return pkg_config.resolve(
+                self.env, name, submodules, version, usage['pcfiles'],
+                format=format, kind=kind, search_path=usage['path'],
+                extra_options=usage['extra_args']
             )
-            link_options = opts.option_list(
-                opts.lib(self.library(i, kind)) for i in iterate(lib_names)
+        elif usage['type'] == 'path':
+            return self._resolve_path(
+                name, submodules, format, kind, version=version,
+                get_version=get_version, headers=headers, libs=libs,
+                usage=usage
             )
 
-            path_note = ' in {}'.format(
-                link_options[0].library.path.parent().string()
-            ) if link_options else ''
-            log.info('found package {!r} via path-search{}'
-                     .format(name, path_note))
-            return CommonPackage(name, format, compile_options, link_options)
+        raise PackageResolutionError(
+            'unsupported package usage {!r} for {!r}'
+            .format(usage['type'], name)
+        )

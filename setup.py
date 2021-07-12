@@ -48,7 +48,7 @@ custom_cmds = {
 }
 
 try:
-    from packaging.version import Version
+    from verspec.python import Version
 
     class DocServe(Command):
         description = 'serve the documentation locally'
@@ -86,10 +86,14 @@ try:
             title = '{} ({})'.format(v.base_version, alias)
             short_version = '{}.{}'.format(*v.release[:2])
 
-            info = json.loads(subprocess.check_output(
-                ['mike', 'list', '-j', alias],
-                universal_newlines=True
-            ))
+            try:
+                info = json.loads(subprocess.check_output(
+                    ['mike', 'list', '-j', alias],
+                    universal_newlines=True
+                ))
+            except subprocess.CalledProcessError:
+                info = None
+
             if info['version'] != short_version:
                 t = re.sub(r' \({}\)$'.format(re.escape(alias)), '',
                            info['title'])
@@ -108,7 +112,7 @@ try:
 
     class LintCommand(Flake8):
         def distribution_files(self):
-            return ['setup.py', 'bfg9000', 'examples', 'test']
+            return ['mkdocs.py', 'setup.py', 'bfg9000', 'examples', 'test']
 
     custom_cmds['lint'] = LintCommand
 except ImportError:
@@ -119,6 +123,7 @@ more_requires = []
 if os.getenv('STDEB_BUILD') not in ['1', 'true']:
     more_requires.extend([
         'doppel >= 0.4.0',
+        'mopack',
         'pysetenv;platform_system=="Windows"'
     ])
     if os.getenv('NO_PATCHELF') not in ['1', 'true']:
@@ -128,18 +133,13 @@ with open(os.path.join(root_dir, 'README.md'), 'r') as f:
     # Read from the file and strip out the badges.
     long_desc = re.sub(r'(^# bfg9000.*)\n\n(.+\n)*', r'\1', f.read())
 
-try:
-    import pypandoc
-    long_desc = pypandoc.convert_text(long_desc, 'rst', format='md')
-except ImportError:
-    pass
-
 setup(
     name='bfg9000',
     version=version,
 
     description='A cross-platform build file generator',
     long_description=long_desc,
+    long_description_content_type='text/markdown',
     keywords='build file generator',
     url='https://jimporter.github.io/bfg9000/',
 
@@ -156,20 +156,21 @@ setup(
         'License :: OSI Approved :: BSD License',
 
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
 
     packages=find_packages(exclude=['test', 'test.*']),
 
+    python_requires='>=3.6',
     install_requires=(
-        ['colorama', 'packaging >= 17.0', 'setuptools'] + more_requires
+        ['colorama', 'pyyaml', 'setuptools', 'verspec'] + more_requires
     ),
     extras_require={
         'dev': ['coverage', 'flake8 >= 3.7', 'lxml', 'mike >= 0.3.1',
-                'mkdocs-bootswatch', 'pypandoc >= 1.4', 'stdeb'],
+                'mkdocs-bootswatch', 'mkdocs-macros-plugin', 'stdeb'],
         'test': ['coverage', 'flake8 >= 3.7', 'lxml'],
         'msbuild': ['lxml'],
     },

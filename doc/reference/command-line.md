@@ -34,7 +34,7 @@ source directory (i.e. it contains a build.bfg file), the build files will be
 created in the current directory. Otherwise, *DIRECTORY* is treated as the build
 directory, and bfg9000 will look for a build.bfg file in the current directory.
 
-#### --backend *BACKEND* { #configure-backend }
+#### -B *BACKEND*, --backend *BACKEND* { #configure-backend }
 
 The kind of build files to generate; one of `ninja`, `make`, or `msbuild`. The
 default value depends on what build backends you have installed, but if `ninja`
@@ -55,6 +55,23 @@ Enable/disable building shared libraries when using
 Enable/disable building static libraries when using
 [*library*()](builtins.md#library) in your build.bfg files. Defaults to enabled.
 
+#### --enable-compdb, --disable-compdb { #configure-enable-compdb }
+
+Enable/disable generation of `compile_commands.json` when generating build
+files. Defaults to enabled.
+
+#### -p *FILE*, --package-file *FILE* { #configure-package-file }
+
+Additional [mopack][mopack] package files to consult when resolving packages.
+
+#### -P *FLAG*, --package-flag *FLAG* { #configure-package-flag }
+
+Additional [mopack][mopack] flags to use when resolving packages.
+
+#### --no-resolve-packages { #configure-no-resolve-packages }
+
+Disable resolution of package dependencies via [mopack][mopack].
+
 #### --prefix *PATH* { #configure-prefix }
 
 The installation prefix to use when installing built files. On Linux and macOS,
@@ -70,18 +87,27 @@ The installation prefix to use when installing architecture-dependent files
 
 #### --bindir *PATH* { #configure-bindir }
 
-The installation prefix to use for executables. Defaults to `<prefix>/bin` on
-Linux and macOS, and `<prefix>` on Windows.
+The installation prefix to use for executables. Defaults to `<exec-prefix>/bin`
+on Linux and macOS, and `<exec-prefix>` on Windows.
 
 #### --libdir *PATH* { #configure-libdir }
 
-The installation prefix to use for libraries. Defaults to `<prefix>/lib` on
-Linux and macOS, and `<prefix>` on Windows.
+The installation prefix to use for libraries. Defaults to `<exec-prefix>/lib` on
+Linux and macOS, and `<exec-prefix>` on Windows.
 
 #### --includedir *PATH* { #configure-includedir }
 
 The installation prefix to use for headers. Defaults to `<prefix>/include` on
 Linux and macOS, and `<prefix>` on Windows.
+
+#### --datadir *PATH* { #configure-includedir }
+
+The installation prefix to use for data files. Defaults to `<prefix>/share` on
+Linux and macOS, and `<prefix>` on Windows.
+
+#### --mandir *PATH* { #configure-mandir }
+
+The installation prefix to use for man pages. Defaults to `<datadir>/man`.
 
 ### bfg9000 configure-into *SRCDIR* *BUILDDIR* { #configure-into }
 
@@ -103,7 +129,23 @@ Print the environment variables stored by the build configuration in *BUILDDIR*.
 
 Only show environment variables that differ from the current environment.
 
+### bfg9000 run *COMMAND* { #run }
+
+Run an arbitrary *COMMAND* with the environment variables set for the current
+build.
+
+#### -I, --initial { #run-initial }
+
+Use the *initial* environment variables, before any modification by toolchain
+files.
+
+#### -B *BUILDDIR*, --builddir *BUILDDIR* { #run-builddir }
+
+Set the build directory to pull environment variable state from.
+
 ## 9k shorthand
 
 `9k` is a special shorthand to make it easier to configure your build. It's
 equivalent to [`bfg9000 configure`](#configure).
+
+[mopack]: https://jimporter.github.io/mopack/

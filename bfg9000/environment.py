@@ -33,11 +33,75 @@ class EnvVersionError(RuntimeError):
 
 
 class EnvVarDict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial = dict(self)
+        self._changes = {}
+
+    def to_json(self):
+        return {
+            'initial': self.initial,
+            'current': self,
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        d = cls.__new__(cls)
+        super(cls, d).__init__(data['current'])
+        d.initial = data['initial']
+        return d
+
+    @property
+    def changes(self):
+        if not hasattr(self, '_changes'):
+            self._changes = {}
+            for k, v in self.items():
+                if k not in self.initial or self.initial[k] != v:
+                    self._changes[k] = v
+            for k in set(self.initial.keys()) - self.keys():
+                self._changes[k] = None
+        return self._changes
+
+    def reset(self):
+        super().clear()
+        super().update(self.initial)
+        self._changes = {}
+
     def __setitem__(self, key, value):
         if ( not isinstance(key, str) or
-             not isinstance(value, str) ):  # pragma: no cover
+             not isinstance(value, str) ):
             raise TypeError('expected a string')
         super().__setitem__(key, value)
+        self.changes[key] = value
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self.changes[key] = None
+
+    def clear(self):
+        for k in self:
+            self.changes[k] = None
+        super().clear()
+
+    def pop(self, key, *args, **kwargs):
+        if key in self:
+            self.changes[key] = None
+        return super().pop(key, *args, **kwargs)
+
+    def popitem(self):
+        key, value = super().popitem()
+        self.changes[key] = None
+        return key, value
+
+    def setdefault(self, key, default):
+        if key not in self:
+            self[key] = default
+            return default
+        return self[key]
+
+    def update(self, *args, **kwargs):
+        for k, v in dict(*args, **kwargs).items():
+            self[k] = v
 
     def getpaths(self, key, default=None, **kwargs):
         return [abspath(i) for i in
@@ -61,7 +125,7 @@ class Toolchain:
 
 
 class Environment:
-    version = 14
+    version = 17
     envfile = '.bfg_environ'
 
     Mode = shell.Mode
@@ -85,11 +149,11 @@ class Environment:
         self.builddir = try_as_directory(builddir)
         self.install_dirs = {}
         self.toolchain = Toolchain()
+        self.mopack = []
 
-        self.initial_variables = dict(os.environ)
-        self.init_variables()
+        self.variables = EnvVarDict(dict(os.environ))
 
-    def finalize(self, install_dirs, library_mode, extra_args=None):
+    def finalize(self, install_dirs, library_mode, compdb, extra_args=None):
         # Fill in any install dirs that aren't already set (e.g. by a
         # toolchain file) with defaults from the target platform, but skip
         # absolute paths if this is a cross-compilation build.
@@ -106,10 +170,11 @@ class Environment:
                 self.install_dirs[k] = v.as_directory()
 
         self.library_mode = LibraryMode(*library_mode)
+        self.compdb = compdb
         self.extra_args = extra_args
 
-    def init_variables(self):
-        self.variables = EnvVarDict(self.initial_variables)
+    def reload(self):
+        self.variables.reset()
 
     @property
     def is_cross(self):
@@ -208,12 +273,13 @@ class Environment:
                         for k, v in self.install_dirs.items()
                     },
                     'toolchain': self.toolchain.to_json(),
+                    'mopack': [i.to_json() for i in self.mopack],
 
                     'library_mode': self.library_mode,
+                    'compdb': self.compdb,
                     'extra_args': self.extra_args,
 
-                    'initial_variables': self.initial_variables,
-                    'variables': self.variables,
+                    'variables': self.variables.to_json(),
                 }
             }, out)
 
@@ -241,7 +307,7 @@ class Environment:
 
         # v7 replaces bfgpath with bfgdir.
         if version < 7:
-            bfgdir = Path.from_json(data['bfgpath'] + (False,)).parent()
+            bfgdir = Path.from_json(data['bfgpath'] + [False]).parent()
             data['bfgdir'] = bfgdir.to_json()
             del data['bfgpath']
 
@@ -263,9 +329,9 @@ class Environment:
         # v11 adds $(DESTDIR) support to Path objects.
         if version < 11:
             for i in ('bfgdir', 'srcdir', 'builddir'):
-                data[i] += (False,)
+                data[i] += [False]
             for i in data['install_dirs']:
-                data['install_dirs'][i] += (False,)
+                data['install_dirs'][i] += [False]
 
         # v12 splits platform into host_platform and target_platform.
         if version < 12:
@@ -284,15 +350,34 @@ class Environment:
                 data[i] = {'genus': genus, 'species': species,
                            'arch': platform.machine()}
 
+        # v15 adds mopack file list and changes how variables are stored.
+        if version < 15:
+            data['mopack'] = []
+            data['variables'] = {
+                'initial': data.pop('initial_variables'),
+                'current': data.pop('variables'),
+            }
+
+        # v16 adds support for emitting compile_commands.json.
+        if version < 16:
+            data['compdb'] = True
+
+        # v17 adds datadir and mandir to install_dirs.
+        if version < 17:
+            target_plat = platforms.target.from_json(data['target_platform'])
+            for i in ('datadir', 'mandir'):
+                p = target_plat.install_dirs[InstallRoot[i]].to_json()
+                data['install_dirs'][i] = p
+
         # Now that we've upgraded, initialize the Environment object.
-        env = Environment.__new__(Environment)
+        env = cls.__new__(cls)
 
         env.host_platform = platforms.host.from_json(data['host_platform'])
         env.target_platform = platforms.target.from_json(
             data['target_platform']
         )
 
-        for i in ('backend', 'extra_args', 'initial_variables'):
+        for i in ('backend', 'extra_args'):
             setattr(env, i, data[i])
 
         for i in ('bfgdir', 'srcdir', 'builddir'):
@@ -304,7 +389,9 @@ class Environment:
             for k, v in data['install_dirs'].items()
         }
         env.toolchain = Toolchain.from_json(data['toolchain'])
-        env.variables = EnvVarDict(data['variables'])
+        env.mopack = [Path.from_json(i) for i in data['mopack']]
+        env.variables = EnvVarDict.from_json(data['variables'])
         env.library_mode = LibraryMode(*data['library_mode'])
+        env.compdb = data['compdb']
 
         return env

@@ -45,6 +45,16 @@ class TestConfigure(IntegrationTest):
             ['9k', '--debug', self.builddir, '--backend', self.backend]
         )
         self.checkBuild()
+        self.assertExists('compile_commands.json')
+
+    def test_no_comp_db(self):
+        os.chdir(self.srcdir)
+        self.assertPopen(
+            ['9k', '--debug', self.builddir, '--disable-compdb', '--backend',
+             self.backend]
+        )
+        self.checkBuild()
+        self.assertNotExists('compile_commands.json')
 
 
 class TestConfigureErrors(BasicIntegrationTest):
@@ -132,6 +142,14 @@ class TestRefresh(BasicIntegrationTest):
         self.assertRegex(output,
                          'build directory must not contain a build.bfg file')
 
+    def test_no_comp_db(self):
+        os.chdir(self.srcdir)
+        self.configure(extra_args=['--disable-compdb'], backend=backends[0])
+        self.assertNotExists('compile_commands.json')
+        os.chdir(self.builddir)
+        self.assertPopen(['bfg9000', 'refresh'])
+        self.assertNotExists('compile_commands.json')
+
 
 class TestEnv(BasicIntegrationTest):
     def __init__(self, *args, **kwargs):
@@ -143,20 +161,63 @@ class TestEnv(BasicIntegrationTest):
         output = self.assertPopen(['bfg9000', 'env'])
         self.assertRegex(output, '(?m)^MY_ENV_VAR=value$')
 
-    def test_env_unique(self):
+    def test_unique(self):
         self.configure(extra_env={'MY_ENV_VAR': 'value'}, backend=backends[0])
         output = self.assertPopen(['bfg9000', 'env', '-u'])
         self.assertEqual(output, 'MY_ENV_VAR=value\n')
 
-    def test_env_extra_args(self):
+    def test_extra_args(self):
         output = self.assertPopen(['bfg9000', 'env', '--foo'], returncode=2)
         self.assertRegex(output, 'unrecognized arguments: --foo')
 
-    def test_env_in_srcdir(self):
+    def test_in_srcdir(self):
         os.chdir(self.srcdir)
         output = self.assertPopen(['bfg9000', 'env'], returncode=2)
         self.assertRegex(output,
                          'build directory must not contain a build.bfg file')
+
+    def test_in_other_dir(self):
+        os.chdir(test_data_dir)
+        output = self.assertPopen(['bfg9000', 'env'], returncode=1)
+        self.assertRegex(output, 'unable to reload environment')
+
+
+class TestRun(BasicIntegrationTest):
+    def __init__(self, *args, **kwargs):
+        super().__init__(os.path.join(examples_dir, '01_executable'),
+                         configure=False, *args, **kwargs)
+
+    def test_run(self):
+        self.configure(backend=backends[0])
+        output = self.assertPopen(['bfg9000', 'run', 'echo', 'hi'])
+        self.assertRegex(output, '(?m)^hi$')
+
+    def test_dash_dash(self):
+        self.configure(backend=backends[0])
+        output = self.assertPopen(['bfg9000', 'run', '--', 'echo', 'hi'])
+        self.assertRegex(output, '(?m)^hi$')
+
+    def test_extra_args(self):
+        output = self.assertPopen(['bfg9000', 'run', '--foo'], returncode=2)
+        self.assertRegex(output, 'unrecognized arguments: --foo')
+
+    def test_in_srcdir(self):
+        os.chdir(self.srcdir)
+        output = self.assertPopen(['bfg9000', 'run', 'echo', 'hi'],
+                                  returncode=2)
+        self.assertRegex(output,
+                         'build directory must not contain a build.bfg file')
+
+    def test_in_other_dir(self):
+        os.chdir(test_data_dir)
+        output = self.assertPopen(['bfg9000', 'run', 'echo', 'hi'],
+                                  returncode=1)
+        self.assertRegex(output, 'unable to reload environment')
+
+    def test_no_args(self):
+        self.configure(backend=backends[0])
+        self.assertPopen(['bfg9000', 'run'], returncode=2)
+        self.assertPopen(['bfg9000', 'run', '--'], returncode=2)
 
 
 class TestDepfixer(SubprocessTestCase):
