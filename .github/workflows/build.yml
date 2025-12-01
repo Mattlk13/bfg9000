@@ -224,7 +224,7 @@ jobs:
           echo "CXX=g++" >> ${env:GITHUB_ENV}
       - name: Run tests
         run: |
-          python setup.py coverage -q
+          python setup.py coverage -q -s test.unit.test_options
           coverage xml
       - name: Upload coverage
         uses: codecov/codecov-action@v3
